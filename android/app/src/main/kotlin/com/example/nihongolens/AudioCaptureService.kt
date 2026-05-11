@@ -25,6 +25,8 @@ class AudioCaptureService : Service() {
 
         createNotification()
 
+        startOverlay()
+
         val resultCode =
             intent?.getIntExtra("resultCode", -1) ?: -1
 
@@ -44,6 +46,38 @@ class AudioCaptureService : Service() {
         startAudioCapture()
 
         return START_STICKY
+    }
+
+    private fun startOverlay() {
+
+        val overlayIntent =
+            Intent(
+                this,
+                OverlayService::class.java
+            )
+
+        overlayIntent.putExtra(
+            "subtitle",
+            "Starting subtitle engine..."
+        )
+
+        startService(overlayIntent)
+    }
+
+    private fun updateOverlay(text: String) {
+
+        val overlayIntent =
+            Intent(
+                this,
+                OverlayService::class.java
+            )
+
+        overlayIntent.putExtra(
+            "subtitle",
+            text
+        )
+
+        startService(overlayIntent)
     }
 
     private fun startAudioCapture() {
@@ -104,10 +138,12 @@ class AudioCaptureService : Service() {
                     "Captured Audio Bytes: $read"
                 )
 
-                // NEXT STEP:
-                // Speech recognition
-                // Translation
-                // Floating subtitles
+                if (read != null && read > 0) {
+
+                    updateOverlay(
+                        "Japanese audio detected..."
+                    )
+                }
             }
 
         }.start()
