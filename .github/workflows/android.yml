@@ -1,49 +1,37 @@
-name: Build Nihongo Lens APK
+name: Android Build
 
 on:
   push:
-    branches: [ main, master ]
-  workflow_dispatch:
+    branches:
+      - main
 
 jobs:
-  build-apk:
+  build:
     runs-on: ubuntu-latest
-    timeout-minutes: 40
 
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Set up Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
-      - name: Set up Flutter
+      - name: Setup Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.19.6'
-          channel: 'stable'
-          cache: true
+          flutter-version: '3.22.2'
 
-      - name: Flutter version info
-        run: flutter --version
-
-      - name: Install Flutter dependencies
+      - name: Install dependencies
         run: flutter pub get
-        working-directory: nihongo_v3
 
-      - name: Build release APK
-        run: flutter build apk --release --no-tree-shake-icons
-        working-directory: nihongo_v3
+      - name: Build APK
+        run: flutter build apk --release
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: nihongo-lens-apk
-          path: nihongo_v3/build/app/outputs/flutter-apk/app-release.apk
-          retention-days: 90
-
-      - name: Show APK size
-        run: ls -lh nihongo_v3/build/app/outputs/flutter-apk/app-release.apk
+          name: release-apk
+          path: build/app/outputs/flutter-apk/app-release.apk
