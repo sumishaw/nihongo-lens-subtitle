@@ -18,6 +18,7 @@ class AudioCaptureService : Service() {
     private var audioRecord: AudioRecord? = null
 
     private lateinit var voskManager: VoskManager
+    private lateinit var translatorManager: TranslatorManager
 
     override fun onStartCommand(
         intent: Intent?,
@@ -30,6 +31,8 @@ class AudioCaptureService : Service() {
         startOverlay()
 
         voskManager = VoskManager(this)
+
+        translatorManager = TranslatorManager(this)
 
         val resultCode =
             intent?.getIntExtra("resultCode", -1) ?: -1
@@ -151,7 +154,14 @@ class AudioCaptureService : Service() {
 
                     if (result.isNotEmpty()) {
 
-                        updateOverlay(result)
+                        translatorManager.translate(
+                            result
+                        ) { translated ->
+
+                            updateOverlay(
+                                translated
+                            )
+                        }
                     }
                 }
             }
@@ -182,8 +192,12 @@ class AudioCaptureService : Service() {
 
         val notification =
             Notification.Builder(this, channelId)
-                .setContentTitle("Nihongo Lens Running")
-                .setContentText("Capturing internal audio")
+                .setContentTitle(
+                    "Nihongo Lens Running"
+                )
+                .setContentText(
+                    "Capturing internal audio"
+                )
                 .setSmallIcon(
                     android.R.drawable.ic_btn_speak_now
                 )
