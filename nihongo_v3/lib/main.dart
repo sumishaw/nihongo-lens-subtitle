@@ -105,17 +105,17 @@ class _TranslatorScreenState extends State<TranslatorScreen>
       sourceLanguage: TranslateLanguage.japanese,
       targetLanguage: TranslateLanguage.english,
     );
-    final jaOk = await _modelManager.isModelDownloaded(TranslateLanguage.japanese);
-    final enOk = await _modelManager.isModelDownloaded(TranslateLanguage.english);
+    final jaOk = await _modelManager.isModelDownloaded(TranslateLanguage.japanese.bcpCode);
+    final enOk = await _modelManager.isModelDownloaded(TranslateLanguage.english.bcpCode);
     if (!jaOk || !enOk) {
       if (mounted) setState(() { _isDownloading = true; _statusMessage = 'Downloading language pack...'; });
       try {
         if (!jaOk) {
-          await _modelManager.downloadModel(TranslateLanguage.japanese, isWifiRequired: false);
+          await _modelManager.downloadModel(TranslateLanguage.japanese.bcpCode, isWifiRequired: false);
           if (mounted) setState(() => _downloadProgress = 0.6);
         }
         if (!enOk) {
-          await _modelManager.downloadModel(TranslateLanguage.english, isWifiRequired: false);
+          await _modelManager.downloadModel(TranslateLanguage.english.bcpCode, isWifiRequired: false);
           if (mounted) setState(() => _downloadProgress = 1.0);
         }
         if (mounted) setState(() { _modelReady = true; _isDownloading = false; _statusMessage = ''; });
