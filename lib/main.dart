@@ -15,8 +15,8 @@ class NihongoLensApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: const HomePage(),
       theme: ThemeData.dark(),
+      home: const HomePage(),
     );
   }
 }
@@ -56,7 +56,6 @@ class _HomePageState extends State<HomePage> {
 
       speech.listen(
         localeId: 'ja_JP',
-        listenMode: ListenMode.confirmation,
         partialResults: true,
         onResult: (result) async {
           String japanese = result.recognizedWords;
@@ -77,9 +76,7 @@ class _HomePageState extends State<HomePage> {
       await FlutterOverlayWindow.showOverlay(
         enableDrag: true,
         overlayTitle: 'Nihongo Lens',
-        overlayContent: 'Live Translation Active',
-        flag: OverlayFlag.defaultFlag,
-        visibility: NotificationVisibility.visibilityPublic,
+        overlayContent: 'Translation Active',
         height: 160,
         width: WindowSize.matchParent,
         alignment: OverlayAlignment.bottomCenter,
@@ -101,7 +98,6 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Nihongo Lens'),
-        centerTitle: true,
       ),
       body: Padding(
         padding: const EdgeInsets.all(20),
@@ -124,10 +120,14 @@ class _HomePageState extends State<HomePage> {
             ),
             const SizedBox(height: 40),
             ElevatedButton(
-              onPressed: isListening ? stopListening : startListening,
-              child: Text(isListening
-                  ? 'STOP TRANSLATION'
-                  : 'START LIVE TRANSLATION'),
+              onPressed: isListening
+                  ? stopListening
+                  : startListening,
+              child: Text(
+                isListening
+                    ? 'STOP TRANSLATION'
+                    : 'START LIVE TRANSLATION',
+              ),
             )
           ],
         ),
