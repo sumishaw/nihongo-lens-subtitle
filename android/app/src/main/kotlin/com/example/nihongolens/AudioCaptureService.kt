@@ -10,14 +10,11 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
-import android.util.Log
 
 class AudioCaptureService : Service() {
 
     private var mediaProjection: MediaProjection? = null
     private var audioRecord: AudioRecord? = null
-
-    private lateinit var translatorManager: TranslatorManager
 
     private var lastUpdateTime = 0L
 
@@ -29,9 +26,9 @@ class AudioCaptureService : Service() {
 
         createNotification()
 
-        startOverlay()
-
-        translatorManager = TranslatorManager(this)
+        startOverlay(
+            "Listening for Japanese audio..."
+        )
 
         val resultCode =
             intent?.getIntExtra("resultCode", -1) ?: -1
@@ -54,23 +51,9 @@ class AudioCaptureService : Service() {
         return START_STICKY
     }
 
-    private fun startOverlay() {
-
-        val overlayIntent =
-            Intent(
-                this,
-                OverlayService::class.java
-            )
-
-        overlayIntent.putExtra(
-            "subtitle",
-            "Starting subtitle engine..."
-        )
-
-        startService(overlayIntent)
-    }
-
-    private fun updateOverlay(text: String) {
+    private fun startOverlay(
+        text: String
+    ) {
 
         val overlayIntent =
             Intent(
@@ -92,8 +75,12 @@ class AudioCaptureService : Service() {
             AudioPlaybackCaptureConfiguration.Builder(
                 mediaProjection!!
             )
-                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                .addMatchingUsage(AudioAttributes.USAGE_GAME)
+                .addMatchingUsage(
+                    AudioAttributes.USAGE_MEDIA
+                )
+                .addMatchingUsage(
+                    AudioAttributes.USAGE_GAME
+                )
                 .build()
 
         val sampleRate = 16000
@@ -139,28 +126,23 @@ class AudioCaptureService : Service() {
                         buffer.size
                     )
 
-                Log.d(
-                    "NIHONGO_LENS",
-                    "Captured Audio Bytes: $read"
-                )
-
                 val currentTime =
                     System.currentTimeMillis()
 
                 if (
-                    currentTime - lastUpdateTime > 2000
+                    read != null
+                    &&
+                    read > 0
+                    &&
+                    currentTime - lastUpdateTime > 2500
                 ) {
 
-                    lastUpdateTime = currentTime
+                    lastUpdateTime =
+                        currentTime
 
-                    translatorManager.translate(
-                        "日本語の音声を検出しました"
-                    ) { translated ->
-
-                        updateOverlay(
-                            translated
-                        )
-                    }
+                    startOverlay(
+                        "Japanese audio detected..."
+                    )
                 }
             }
 
@@ -169,9 +151,13 @@ class AudioCaptureService : Service() {
 
     private fun createNotification() {
 
-        val channelId = "nihongo_audio"
+        val channelId =
+            "nihongo_audio"
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (
+            Build.VERSION.SDK_INT >=
+            Build.VERSION_CODES.O
+        ) {
 
             val channel =
                 NotificationChannel(
@@ -185,9 +171,9 @@ class AudioCaptureService : Service() {
                     NotificationManager::class.java
                 )
 
-                manager.createNotificationChannel(
-                    channel
-                )
+            manager.createNotificationChannel(
+                channel
+            )
         }
 
         val notification =
