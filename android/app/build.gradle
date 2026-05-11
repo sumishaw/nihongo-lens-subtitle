@@ -1,12 +1,18 @@
+plugins {
+    id "com.android.application"
+    id "org.jetbrains.kotlin.android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
 android {
     namespace "com.example.nihongolens"
 
-    compileSdkVersion 34
+    compileSdk 34
 
     defaultConfig {
         applicationId "com.example.nihongolens"
-        minSdkVersion 23
-        targetSdkVersion 34
+        minSdk 23
+        targetSdk 34
         versionCode 1
         versionName "2.0"
     }
@@ -17,7 +23,7 @@ android {
     }
 
     kotlinOptions {
-        jvmTarget = '17'
+        jvmTarget = "17"
     }
 
     buildTypes {
@@ -27,4 +33,8 @@ android {
             shrinkResources false
         }
     }
+}
+
+flutter {
+    source "../.."
 }
