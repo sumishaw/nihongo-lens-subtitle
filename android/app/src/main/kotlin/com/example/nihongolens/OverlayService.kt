@@ -12,6 +12,7 @@ import android.widget.TextView
 class OverlayService : Service() {
 
     private lateinit var windowManager: WindowManager
+
     private lateinit var subtitleView: TextView
 
     override fun onCreate() {
@@ -69,10 +70,17 @@ class OverlayService : Service() {
 
         params.y = 180
 
-        windowManager.addView(
-            subtitleView,
-            params
-        )
+        try {
+
+            windowManager.addView(
+                subtitleView,
+                params
+            )
+
+        } catch (e: Exception) {
+
+            e.printStackTrace()
+        }
     }
 
     override fun onStartCommand(
@@ -82,11 +90,14 @@ class OverlayService : Service() {
     ): Int {
 
         val subtitle =
-            intent?.getStringExtra("subtitle")
+            intent?.getStringExtra(
+                "subtitle"
+            )
 
         if (subtitle != null) {
 
-            subtitleView.text = subtitle
+            subtitleView.text =
+                subtitle
         }
 
         return START_STICKY
@@ -96,12 +107,22 @@ class OverlayService : Service() {
 
         super.onDestroy()
 
-        windowManager.removeView(
-            subtitleView
-        )
+        try {
+
+            windowManager.removeView(
+                subtitleView
+            )
+
+        } catch (e: Exception) {
+
+            e.printStackTrace()
+        }
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(
+        intent: Intent?
+    ): IBinder? {
+
         return null
     }
 }
