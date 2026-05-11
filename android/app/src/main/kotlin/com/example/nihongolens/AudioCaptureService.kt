@@ -17,6 +17,8 @@ class AudioCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var audioRecord: AudioRecord? = null
 
+    private lateinit var voskManager: VoskManager
+
     override fun onStartCommand(
         intent: Intent?,
         flags: Int,
@@ -26,6 +28,8 @@ class AudioCaptureService : Service() {
         createNotification()
 
         startOverlay()
+
+        voskManager = VoskManager(this)
 
         val resultCode =
             intent?.getIntExtra("resultCode", -1) ?: -1
@@ -140,9 +144,15 @@ class AudioCaptureService : Service() {
 
                 if (read != null && read > 0) {
 
-                    updateOverlay(
-                        "Japanese audio detected..."
-                    )
+                    val result =
+                        voskManager.recognizeAudio(
+                            buffer
+                        )
+
+                    if (result.isNotEmpty()) {
+
+                        updateOverlay(result)
+                    }
                 }
             }
 
