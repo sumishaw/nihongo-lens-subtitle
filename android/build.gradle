@@ -1,42 +1,30 @@
-def localProperties = new Properties()
-def localPropertiesFile = rootProject.file('local.properties')
+buildscript {
+    ext.kotlin_version = '1.9.22'
 
-if (localPropertiesFile.exists()) {
-    localPropertiesFile.withReader('UTF-8') { reader ->
-        localProperties.load(reader)
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:8.2.2'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
     }
 }
 
-def flutterRoot = localProperties.getProperty('flutter.sdk')
-
-apply plugin: 'com.android.application'
-apply plugin: 'kotlin-android'
-
-apply from: "$flutterRoot/packages/flutter_tools/gradle/flutter.gradle"
-
-android {
-    namespace "com.example.nihongolens"
-
-    compileSdkVersion 34
-
-    defaultConfig {
-        applicationId "com.example.nihongolens"
-        minSdkVersion 23
-        targetSdkVersion 34
-        versionCode 1
-        versionName "2.0"
-    }
-
-    buildTypes {
-        release {
-            signingConfig signingConfigs.debug
-        }
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
     }
 }
 
-flutter {
-    source '../..'
+rootProject.buildDir = '../build'
+
+subprojects {
+    project.buildDir = "${rootProject.buildDir}/${project.name}"
 }
 
-dependencies {
+tasks.register("clean", Delete) {
+    delete rootProject.buildDir
 }
