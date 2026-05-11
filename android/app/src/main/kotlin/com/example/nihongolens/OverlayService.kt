@@ -2,6 +2,7 @@ package com.example.nihongolens
 
 import android.app.Service
 import android.content.Intent
+import android.graphics.Color
 import android.graphics.PixelFormat
 import android.os.IBinder
 import android.view.Gravity
@@ -14,6 +15,7 @@ class OverlayService : Service() {
     private lateinit var subtitleView: TextView
 
     override fun onCreate() {
+
         super.onCreate()
 
         windowManager =
@@ -25,15 +27,15 @@ class OverlayService : Service() {
         subtitleView.text =
             "Waiting for Japanese audio..."
 
-        subtitleView.textSize = 22f
+        subtitleView.textSize = 24f
 
         subtitleView.setTextColor(
-            android.graphics.Color.WHITE
+            Color.WHITE
         )
 
         subtitleView.setBackgroundColor(
-            android.graphics.Color.argb(
-                180,
+            Color.argb(
+                160,
                 0,
                 0,
                 0
@@ -41,15 +43,17 @@ class OverlayService : Service() {
         )
 
         subtitleView.setPadding(
-            40,
-            20,
-            40,
-            20
+            50,
+            30,
+            50,
+            30
         )
 
         val params =
             WindowManager.LayoutParams(
+
                 WindowManager.LayoutParams.WRAP_CONTENT,
+
                 WindowManager.LayoutParams.WRAP_CONTENT,
 
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
@@ -63,7 +67,7 @@ class OverlayService : Service() {
         params.gravity =
             Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
 
-        params.y = 200
+        params.y = 180
 
         windowManager.addView(
             subtitleView,
@@ -77,20 +81,24 @@ class OverlayService : Service() {
         startId: Int
     ): Int {
 
-        val text =
+        val subtitle =
             intent?.getStringExtra("subtitle")
 
-        if (text != null) {
-            subtitleView.text = text
+        if (subtitle != null) {
+
+            subtitleView.text = subtitle
         }
 
         return START_STICKY
     }
 
     override fun onDestroy() {
+
         super.onDestroy()
 
-        windowManager.removeView(subtitleView)
+        windowManager.removeView(
+            subtitleView
+        )
     }
 
     override fun onBind(intent: Intent?): IBinder? {
