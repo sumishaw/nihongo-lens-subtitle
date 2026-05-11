@@ -17,8 +17,9 @@ class AudioCaptureService : Service() {
     private var mediaProjection: MediaProjection? = null
     private var audioRecord: AudioRecord? = null
 
-    private lateinit var voskManager: VoskManager
     private lateinit var translatorManager: TranslatorManager
+
+    private var lastUpdateTime = 0L
 
     override fun onStartCommand(
         intent: Intent?,
@@ -29,8 +30,6 @@ class AudioCaptureService : Service() {
         createNotification()
 
         startOverlay()
-
-        voskManager = VoskManager(this)
 
         translatorManager = TranslatorManager(this)
 
@@ -145,23 +144,22 @@ class AudioCaptureService : Service() {
                     "Captured Audio Bytes: $read"
                 )
 
-                if (read != null && read > 0) {
+                val currentTime =
+                    System.currentTimeMillis()
 
-                    val result =
-                        voskManager.recognizeAudio(
-                            buffer
+                if (
+                    currentTime - lastUpdateTime > 2000
+                ) {
+
+                    lastUpdateTime = currentTime
+
+                    translatorManager.translate(
+                        "日本語の音声を検出しました"
+                    ) { translated ->
+
+                        updateOverlay(
+                            translated
                         )
-
-                    if (result.isNotEmpty()) {
-
-                        translatorManager.translate(
-                            result
-                        ) { translated ->
-
-                            updateOverlay(
-                                translated
-                            )
-                        }
                     }
                 }
             }
@@ -187,11 +185,16 @@ class AudioCaptureService : Service() {
                     NotificationManager::class.java
                 )
 
-            manager.createNotificationChannel(channel)
+                manager.createNotificationChannel(
+                    channel
+                )
         }
 
         val notification =
-            Notification.Builder(this, channelId)
+            Notification.Builder(
+                this,
+                channelId
+            )
                 .setContentTitle(
                     "Nihongo Lens Running"
                 )
@@ -203,10 +206,16 @@ class AudioCaptureService : Service() {
                 )
                 .build()
 
-        startForeground(1, notification)
+        startForeground(
+            1,
+            notification
+        )
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
+    override fun onBind(
+        intent: Intent?
+    ): IBinder? {
+
         return null
     }
 }
