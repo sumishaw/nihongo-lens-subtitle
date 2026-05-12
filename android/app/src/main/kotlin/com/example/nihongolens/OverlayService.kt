@@ -4,125 +4,143 @@ import android.app.Service
 import android.content.Intent
 import android.graphics.Color
 import android.graphics.PixelFormat
-import android.os.IBinder
-import android.view.Gravity
-import android.view.WindowManager
-import android.widget.TextView
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
+import android.os.*
+import android.util.TypedValue
+import android.view.*
+import android.view.animation.AlphaAnimation
+import android.widget.*
 
 class OverlayService : Service() {
 
-    private lateinit var windowManager: WindowManager
-
-    private lateinit var subtitleView: TextView
+    private var windowManager: WindowManager? = null
+    private var overlayView: View? = null
+    private var englishTv: TextView? = null
+    private var japaneseTv: TextView? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var params: WindowManager.LayoutParams? = null
 
     override fun onCreate() {
-
         super.onCreate()
-
-        windowManager =
-            getSystemService(WINDOW_SERVICE)
-                    as WindowManager
-
-        subtitleView = TextView(this)
-
-        subtitleView.text =
-            "Waiting for Japanese audio..."
-
-        subtitleView.textSize = 24f
-
-        subtitleView.setTextColor(
-            Color.WHITE
-        )
-
-        subtitleView.setBackgroundColor(
-            Color.argb(
-                160,
-                0,
-                0,
-                0
-            )
-        )
-
-        subtitleView.setPadding(
-            50,
-            30,
-            50,
-            30
-        )
-
-        val params =
-            WindowManager.LayoutParams(
-
-                WindowManager.LayoutParams.WRAP_CONTENT,
-
-                WindowManager.LayoutParams.WRAP_CONTENT,
-
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-
-                PixelFormat.TRANSLUCENT
-            )
-
-        params.gravity =
-            Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-
-        params.y = 180
-
-        try {
-
-            windowManager.addView(
-                subtitleView,
-                params
-            )
-
-        } catch (e: Exception) {
-
-            e.printStackTrace()
-        }
+        windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
+        buildOverlay()
     }
 
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int
-    ): Int {
+    private fun dp(v: Int) = TypedValue.applyDimension(
+        TypedValue.COMPLEX_UNIT_DIP, v.toFloat(), resources.displayMetrics).toInt()
 
-        val subtitle =
-            intent?.getStringExtra(
-                "subtitle"
-            )
-
-        if (subtitle != null) {
-
-            subtitleView.text =
-                subtitle
+    private fun buildOverlay() {
+        val card = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(14), dp(10), dp(14), dp(12))
+            background = GradientDrawable().apply {
+                setColor(Color.argb(220, 5, 5, 10))
+                cornerRadius = dp(14).toFloat()
+                setStroke(dp(2), Color.argb(200, 255, 59, 59))
+            }
         }
 
+        val topRow = LinearLayout(this).apply {
+            orientation = LinearLayout.HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+        }
+        val label = TextView(this).apply {
+            text = "🎌 Nihongo Lens"
+            setTextColor(Color.argb(160, 255, 255, 255))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f)
+            layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+        }
+        val closeBtn = TextView(this).apply {
+            text = "  ✕  "
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 14f)
+            setOnClickListener { stopSelf() }
+        }
+        topRow.addView(label)
+        topRow.addView(closeBtn)
+
+        val divider = View(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(1)
+            ).also { it.setMargins(0, dp(5), 0, dp(7)) }
+            setBackgroundColor(Color.argb(120, 255, 59, 59))
+        }
+
+        japaneseTv = TextView(this).apply {
+            text = ""
+            setTextColor(Color.argb(160, 200, 200, 255))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f)
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            ).also { it.setMargins(0, 0, 0, dp(4)) }
+        }
+
+        englishTv = TextView(this).apply {
+            text = "Waiting for Japanese audio..."
+            setTextColor(Color.WHITE)
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 18f)
+            typeface = Typeface.DEFAULT_BOLD
+            setLineSpacing(0f, 1.3f)
+        }
+
+        card.addView(topRow)
+        card.addView(divider)
+        card.addView(japaneseTv)
+        card.addView(englishTv)
+        overlayView = card
+
+        params = WindowManager.LayoutParams(
+            (resources.displayMetrics.widthPixels * 0.93).toInt(),
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            y = dp(90)
+        }
+
+        var sx = 0f; var sy = 0f; var ix = 0; var iy = 0
+        card.setOnTouchListener { _, ev ->
+            when (ev.action) {
+                MotionEvent.ACTION_DOWN -> { sx = ev.rawX; sy = ev.rawY; ix = params!!.x; iy = params!!.y }
+                MotionEvent.ACTION_MOVE -> {
+                    params!!.x = ix + (ev.rawX - sx).toInt()
+                    params!!.y = iy - (ev.rawY - sy).toInt()
+                    try { windowManager?.updateViewLayout(overlayView, params) } catch (_: Exception) {}
+                }
+            }
+            true
+        }
+
+        try { windowManager?.addView(overlayView, params) } catch (e: Exception) { e.printStackTrace() }
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        val subtitle = intent?.getStringExtra("subtitle") ?: return START_STICKY
+        val japanese = intent.getStringExtra("japanese") ?: ""
+        val isPartial = intent.getBooleanExtra("partial", false)
+        handler.post {
+            if (japanese.isNotEmpty()) japaneseTv?.text = japanese
+            englishTv?.text = subtitle
+            if (!isPartial) {
+                val fade = AlphaAnimation(0.3f, 1f).apply { duration = 350 }
+                englishTv?.startAnimation(fade)
+            }
+        }
         return START_STICKY
     }
 
     override fun onDestroy() {
-
+        try { windowManager?.removeView(overlayView) } catch (_: Exception) {}
         super.onDestroy()
-
-        try {
-
-            windowManager.removeView(
-                subtitleView
-            )
-
-        } catch (e: Exception) {
-
-            e.printStackTrace()
-        }
     }
 
-    override fun onBind(
-        intent: Intent?
-    ): IBinder? {
-
-        return null
-    }
+    override fun onBind(intent: Intent?): IBinder? = null
 }
