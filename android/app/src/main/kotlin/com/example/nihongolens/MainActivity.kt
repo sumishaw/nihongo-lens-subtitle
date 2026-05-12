@@ -1,12 +1,15 @@
 package com.example.nihongolens
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
-import android.os.Bundle
 import android.provider.Settings
 import androidx.annotation.NonNull
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
@@ -14,15 +17,12 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
 
     private val CHANNEL = "nihongo_lens/audio"
-
-    private val REQUEST_CODE = 1001
-
-    private var pendingStart = false
+    private val REQUEST_CAPTURE = 1001
+    private val REQUEST_MIC = 1002
 
     override fun configureFlutterEngine(
         @NonNull flutterEngine: FlutterEngine
     ) {
-
         super.configureFlutterEngine(flutterEngine)
 
         MethodChannel(
@@ -32,69 +32,79 @@ class MainActivity : FlutterActivity() {
 
             if (call.method == "startCapture") {
 
-                pendingStart = true
+                if (!Settings.canDrawOverlays(this)) {
 
-                checkOverlayPermission()
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+
+                    startActivity(intent)
+                    result.success(true)
+                    return@setMethodCallHandler
+                }
+
+                requestMicPermission()
 
                 result.success(true)
 
             } else {
-
                 result.notImplemented()
             }
         }
     }
 
-    private fun checkOverlayPermission() {
+    private fun requestMicPermission() {
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        if (
+            ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.RECORD_AUDIO
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
 
-            if (!Settings.canDrawOverlays(this)) {
-
-                val intent = Intent(
-                    Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                    Uri.parse("package:$packageName")
-                )
-
-                startActivity(intent)
-
-            } else {
-
-                startAudioCapture()
-            }
+            ActivityCompat.requestPermissions(
+                this,
+                arrayOf(Manifest.permission.RECORD_AUDIO),
+                REQUEST_MIC
+            )
 
         } else {
 
-            startAudioCapture()
+            startProjection()
         }
     }
 
-    override fun onResume() {
-
-        super.onResume()
+    override fun onRequestPermissionsResult(
+        requestCode: Int,
+        permissions: Array<out String>,
+        grantResults: IntArray
+    ) {
+        super.onRequestPermissionsResult(
+            requestCode,
+            permissions,
+            grantResults
+        )
 
         if (
-            pendingStart &&
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
-            Settings.canDrawOverlays(this)
+            requestCode == REQUEST_MIC &&
+            grantResults.isNotEmpty() &&
+            grantResults[0] == PackageManager.PERMISSION_GRANTED
         ) {
-
-            pendingStart = false
-
-            startAudioCapture()
+            startProjection()
         }
     }
 
-    private fun startAudioCapture() {
+    private fun startProjection() {
 
-        val mediaProjectionManager =
+        val manager =
             getSystemService(
                 MEDIA_PROJECTION_SERVICE
             ) as MediaProjectionManager
 
         startActivityForResult(
-            mediaProjectionManager.createScreenCaptureIntent(),
-            REQUEST_CODE
+            manager.createScreenCaptureIntent(),
+            REQUEST_CAPTURE
         )
     }
 
@@ -103,7 +113,6 @@ class MainActivity : FlutterActivity() {
         resultCode: Int,
         data: Intent?
     ) {
-
         super.onActivityResult(
             requestCode,
             resultCode,
@@ -111,7 +120,7 @@ class MainActivity : FlutterActivity() {
         )
 
         if (
-            requestCode == REQUEST_CODE &&
+            requestCode == REQUEST_CAPTURE &&
             resultCode == RESULT_OK &&
             data != null
         ) {
@@ -121,24 +130,10 @@ class MainActivity : FlutterActivity() {
                 AudioCaptureService::class.java
             )
 
-            intent.putExtra(
-                "resultCode",
-                resultCode
-            )
+            intent.putExtra("resultCode", resultCode)
+            intent.putExtra("data", data)
 
-            intent.putExtra(
-                "data",
-                data
-            )
-
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-                startForegroundService(intent)
-
-            } else {
-
-                startService(intent)
-            }
+            ContextCompat.startForegroundService(this, intent)
         }
     }
 }
