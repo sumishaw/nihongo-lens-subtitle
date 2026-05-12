@@ -17,13 +17,13 @@ class MainActivity : FlutterActivity() {
 
     private val REQUEST_CODE = 1001
 
+    private var pendingStart = false
+
     override fun configureFlutterEngine(
         @NonNull flutterEngine: FlutterEngine
     ) {
 
-        super.configureFlutterEngine(
-            flutterEngine
-        )
+        super.configureFlutterEngine(flutterEngine)
 
         MethodChannel(
             flutterEngine.dartExecutor.binaryMessenger,
@@ -31,6 +31,8 @@ class MainActivity : FlutterActivity() {
         ).setMethodCallHandler { call, result ->
 
             if (call.method == "startCapture") {
+
+                pendingStart = true
 
                 checkOverlayPermission()
 
@@ -45,9 +47,7 @@ class MainActivity : FlutterActivity() {
 
     private fun checkOverlayPermission() {
 
-        if (
-            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
 
             if (!Settings.canDrawOverlays(this)) {
 
@@ -64,6 +64,22 @@ class MainActivity : FlutterActivity() {
             }
 
         } else {
+
+            startAudioCapture()
+        }
+    }
+
+    override fun onResume() {
+
+        super.onResume()
+
+        if (
+            pendingStart &&
+            Build.VERSION.SDK_INT >= Build.VERSION_CODES.M &&
+            Settings.canDrawOverlays(this)
+        ) {
+
+            pendingStart = false
 
             startAudioCapture()
         }
@@ -95,16 +111,15 @@ class MainActivity : FlutterActivity() {
         )
 
         if (
-            requestCode == REQUEST_CODE
-            &&
+            requestCode == REQUEST_CODE &&
+            resultCode == RESULT_OK &&
             data != null
         ) {
 
-            val intent =
-                Intent(
-                    this,
-                    AudioCaptureService::class.java
-                )
+            val intent = Intent(
+                this,
+                AudioCaptureService::class.java
+            )
 
             intent.putExtra(
                 "resultCode",
@@ -116,7 +131,14 @@ class MainActivity : FlutterActivity() {
                 data
             )
 
-            startForegroundService(intent)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+
+                startForegroundService(intent)
+
+            } else {
+
+                startService(intent)
+            }
         }
     }
 }
