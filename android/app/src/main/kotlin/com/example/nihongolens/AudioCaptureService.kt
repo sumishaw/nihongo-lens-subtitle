@@ -10,13 +10,12 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import androidx.core.app.NotificationCompat
 
 class AudioCaptureService : Service() {
 
     private var mediaProjection: MediaProjection? = null
     private var audioRecord: AudioRecord? = null
-
-    private var lastUpdateTime = 0L
 
     override fun onStartCommand(
         intent: Intent?,
@@ -24,17 +23,14 @@ class AudioCaptureService : Service() {
         startId: Int
     ): Int {
 
-        createNotification()
-
-        startOverlay(
-            "Listening for Japanese audio..."
-        )
+        startForeground(1, createNotification())
 
         val resultCode =
             intent?.getIntExtra("resultCode", -1) ?: -1
 
         val data =
             intent?.getParcelableExtra<Intent>("data")
+                ?: return START_NOT_STICKY
 
         val projectionManager =
             getSystemService(MEDIA_PROJECTION_SERVICE)
@@ -43,28 +39,24 @@ class AudioCaptureService : Service() {
         mediaProjection =
             projectionManager.getMediaProjection(
                 resultCode,
-                data!!
+                data
             )
+
+        startOverlay("Listening for Japanese audio...")
 
         startAudioCapture()
 
         return START_STICKY
     }
 
-    private fun startOverlay(
-        text: String
-    ) {
+    private fun startOverlay(text: String) {
 
-        val overlayIntent =
-            Intent(
-                this,
-                OverlayService::class.java
-            )
-
-        overlayIntent.putExtra(
-            "subtitle",
-            text
+        val overlayIntent = Intent(
+            this,
+            OverlayService::class.java
         )
+
+        overlayIntent.putExtra("subtitle", text)
 
         startService(overlayIntent)
     }
@@ -75,133 +67,66 @@ class AudioCaptureService : Service() {
             AudioPlaybackCaptureConfiguration.Builder(
                 mediaProjection!!
             )
-                .addMatchingUsage(
-                    AudioAttributes.USAGE_MEDIA
-                )
-                .addMatchingUsage(
-                    AudioAttributes.USAGE_GAME
-                )
+                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
+                .addMatchingUsage(AudioAttributes.USAGE_GAME)
                 .build()
 
         val sampleRate = 16000
 
-        val channelConfig =
-            AudioFormat.CHANNEL_IN_MONO
-
-        val audioFormat =
+        val bufferSize = AudioRecord.getMinBufferSize(
+            sampleRate,
+            AudioFormat.CHANNEL_IN_MONO,
             AudioFormat.ENCODING_PCM_16BIT
+        )
 
-        val bufferSize =
-            AudioRecord.getMinBufferSize(
-                sampleRate,
-                channelConfig,
-                audioFormat
+        audioRecord = AudioRecord.Builder()
+            .setAudioPlaybackCaptureConfig(config)
+            .setAudioFormat(
+                AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                    .setSampleRate(sampleRate)
+                    .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
+                    .build()
             )
-
-        audioRecord =
-            AudioRecord.Builder()
-                .setAudioFormat(
-                    AudioFormat.Builder()
-                        .setEncoding(audioFormat)
-                        .setSampleRate(sampleRate)
-                        .setChannelMask(channelConfig)
-                        .build()
-                )
-                .setBufferSizeInBytes(bufferSize)
-                .setAudioPlaybackCaptureConfig(config)
-                .build()
+            .setBufferSizeInBytes(bufferSize)
+            .build()
 
         audioRecord?.startRecording()
 
         Thread {
-
-            val buffer = ByteArray(bufferSize)
-
             while (true) {
-
-                val read =
-                    audioRecord?.read(
-                        buffer,
-                        0,
-                        buffer.size
-                    )
-
-                val currentTime =
-                    System.currentTimeMillis()
-
-                if (
-                    read != null
-                    &&
-                    read > 0
-                    &&
-                    currentTime - lastUpdateTime > 2500
-                ) {
-
-                    lastUpdateTime =
-                        currentTime
-
-                    startOverlay(
-                        "Japanese audio detected..."
-                    )
-                }
+                Thread.sleep(2500)
+                startOverlay("Japanese audio detected...")
             }
-
         }.start()
     }
 
-    private fun createNotification() {
+    private fun createNotification(): Notification {
 
-        val channelId =
-            "nihongo_audio"
+        val channelId = "nihongo_lens"
 
-        if (
-            Build.VERSION.SDK_INT >=
-            Build.VERSION_CODES.O
-        ) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
 
-            val channel =
-                NotificationChannel(
-                    channelId,
-                    "Nihongo Lens",
-                    NotificationManager.IMPORTANCE_LOW
-                )
+            val channel = NotificationChannel(
+                channelId,
+                "Nihongo Lens",
+                NotificationManager.IMPORTANCE_LOW
+            )
 
             val manager =
-                getSystemService(
-                    NotificationManager::class.java
-                )
+                getSystemService(NotificationManager::class.java)
 
-            manager.createNotificationChannel(
-                channel
-            )
+            manager.createNotificationChannel(channel)
         }
 
-        val notification =
-            Notification.Builder(
-                this,
-                channelId
-            )
-                .setContentTitle(
-                    "Nihongo Lens Running"
-                )
-                .setContentText(
-                    "Capturing internal audio"
-                )
-                .setSmallIcon(
-                    android.R.drawable.ic_btn_speak_now
-                )
-                .build()
-
-        startForeground(
-            1,
-            notification
-        )
+        return NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Nihongo Lens")
+            .setContentText("Capturing internal audio")
+            .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .build()
     }
 
-    override fun onBind(
-        intent: Intent?
-    ): IBinder? {
-
+    override fun onBind(intent: Intent?): IBinder? {
         return null
     }
 }
