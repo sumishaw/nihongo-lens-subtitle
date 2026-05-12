@@ -1,132 +1,155 @@
 package com.example.nihongolens
 
-import android.app.Notification
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Intent
 import android.media.*
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
-import android.os.Build
-import android.os.IBinder
+import android.os.*
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
 import androidx.core.app.NotificationCompat
 
 class AudioCaptureService : Service() {
 
     private var mediaProjection: MediaProjection? = null
-    private var audioRecord: AudioRecord? = null
+    private var speechRecognizer: SpeechRecognizer? = null
+    private var translatorManager: TranslatorManager? = null
+    private val handler = Handler(Looper.getMainLooper())
+    private var isListening = false
+    private var restartRunnable: Runnable? = null
 
-    override fun onStartCommand(
-        intent: Intent?,
-        flags: Int,
-        startId: Int
-    ): Int {
+    companion object {
+        const val CHANNEL_ID = "nihongo_channel"
+        const val NOTIF_ID = 1
+    }
 
-        startForeground(1, createNotification())
+    override fun onCreate() {
+        super.onCreate()
+        createNotificationChannel()
+        translatorManager = TranslatorManager(this)
+    }
 
-        val resultCode =
-            intent?.getIntExtra("resultCode", -1) ?: -1
-
-        val data =
-            intent?.getParcelableExtra<Intent>("data")
-                ?: return START_NOT_STICKY
-
-        val projectionManager =
-            getSystemService(MEDIA_PROJECTION_SERVICE)
-                    as MediaProjectionManager
-
-        mediaProjection =
-            projectionManager.getMediaProjection(
-                resultCode,
-                data
-            )
-
-        startOverlay("Listening for Japanese audio...")
-
-        startAudioCapture()
-
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        startForeground(NOTIF_ID, buildNotification())
+        startMicRecognition()
+        showOverlay("🎤 Listening for Japanese...")
         return START_STICKY
     }
 
-    private fun startOverlay(text: String) {
-
-        val overlayIntent = Intent(
-            this,
-            OverlayService::class.java
-        )
-
-        overlayIntent.putExtra("subtitle", text)
-
-        startService(overlayIntent)
-    }
-
-    private fun startAudioCapture() {
-
-        val config =
-            AudioPlaybackCaptureConfiguration.Builder(
-                mediaProjection!!
-            )
-                .addMatchingUsage(AudioAttributes.USAGE_MEDIA)
-                .addMatchingUsage(AudioAttributes.USAGE_GAME)
-                .build()
-
-        val sampleRate = 16000
-
-        val bufferSize = AudioRecord.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-
-        audioRecord = AudioRecord.Builder()
-            .setAudioPlaybackCaptureConfig(config)
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .setSampleRate(sampleRate)
-                    .setChannelMask(AudioFormat.CHANNEL_IN_MONO)
-                    .build()
-            )
-            .setBufferSizeInBytes(bufferSize)
-            .build()
-
-        audioRecord?.startRecording()
-
-        Thread {
-            while (true) {
-                Thread.sleep(2500)
-                startOverlay("Japanese audio detected...")
-            }
-        }.start()
-    }
-
-    private fun createNotification(): Notification {
-
-        val channelId = "nihongo_lens"
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-
-            val channel = NotificationChannel(
-                channelId,
-                "Nihongo Lens",
-                NotificationManager.IMPORTANCE_LOW
-            )
-
-            val manager =
-                getSystemService(NotificationManager::class.java)
-
-            manager.createNotificationChannel(channel)
+    private fun startMicRecognition() {
+        if (!SpeechRecognizer.isRecognitionAvailable(this)) {
+            showOverlay("⚠️ Install Google app for speech recognition")
+            return
         }
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this)
+        speechRecognizer?.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(p: Bundle?) {}
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(v: Float) {}
+            override fun onBufferReceived(b: ByteArray?) {}
+            override fun onEndOfSpeech() {}
+            override fun onEvent(t: Int, p: Bundle?) {}
 
-        return NotificationCompat.Builder(this, channelId)
-            .setContentTitle("Nihongo Lens")
-            .setContentText("Capturing internal audio")
+            override fun onPartialResults(b: Bundle?) {
+                val partial = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull() ?: return
+                if (partial.isNotBlank()) showOverlay("🎌 $partial", isPartial = true)
+            }
+
+            override fun onResults(b: Bundle?) {
+                val text = b?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                    ?.firstOrNull() ?: ""
+                if (text.isNotBlank()) {
+                    showOverlay("🔄 Translating...")
+                    translatorManager?.translate(text) { english ->
+                        showOverlay(english, japanese = text)
+                    }
+                }
+                scheduleRestart(300)
+            }
+
+            override fun onError(error: Int) {
+                val delay = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH -> 200L
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> 300L
+                    SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> 1000L
+                    SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
+                        showOverlay("⚠️ Mic permission denied")
+                        return
+                    }
+                    else -> 500L
+                }
+                scheduleRestart(delay)
+            }
+        })
+        beginListening()
+    }
+
+    private fun beginListening() {
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+            putExtra(RecognizerIntent.EXTRA_LANGUAGE, "ja-JP")
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500L)
+        }
+        handler.post {
+            try {
+                speechRecognizer?.startListening(intent)
+                isListening = true
+            } catch (e: Exception) {
+                scheduleRestart(1000)
+            }
+        }
+    }
+
+    private fun scheduleRestart(delayMs: Long) {
+        restartRunnable?.let { handler.removeCallbacks(it) }
+        restartRunnable = Runnable {
+            try { speechRecognizer?.stopListening() } catch (_: Exception) {}
+            beginListening()
+        }
+        handler.postDelayed(restartRunnable!!, delayMs)
+    }
+
+    private fun showOverlay(text: String, japanese: String = "", isPartial: Boolean = false) {
+        handler.post {
+            val intent = Intent(this, OverlayService::class.java).apply {
+                putExtra("subtitle", text)
+                putExtra("japanese", japanese)
+                putExtra("partial", isPartial)
+            }
+            startService(intent)
+        }
+    }
+
+    private fun createNotificationChannel() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val ch = NotificationChannel(CHANNEL_ID, "Nihongo Lens", NotificationManager.IMPORTANCE_LOW)
+                .apply { setShowBadge(false) }
+            getSystemService(NotificationManager::class.java).createNotificationChannel(ch)
+        }
+    }
+
+    private fun buildNotification(): Notification {
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setContentTitle("🎌 Nihongo Lens Active")
+            .setContentText("Translating Japanese → English")
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+            .setOngoing(true)
             .build()
     }
 
-    override fun onBind(intent: Intent?): IBinder? {
-        return null
+    override fun onDestroy() {
+        isListening = false
+        restartRunnable?.let { handler.removeCallbacks(it) }
+        try { speechRecognizer?.destroy() } catch (_: Exception) {}
+        translatorManager?.close()
+        stopService(Intent(this, OverlayService::class.java))
+        super.onDestroy()
     }
+
+    override fun onBind(intent: Intent?): IBinder? = null
 }
