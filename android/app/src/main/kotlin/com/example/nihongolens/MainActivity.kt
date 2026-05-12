@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
+import android.os.Bundle
 import android.provider.Settings
 import androidx.annotation.NonNull
 import androidx.core.app.ActivityCompat
@@ -19,6 +20,9 @@ class MainActivity : FlutterActivity() {
     private val CHANNEL = "nihongo_lens/audio"
     private val REQUEST_CAPTURE = 1001
     private val REQUEST_MIC = 1002
+    private val REQUEST_OVERLAY = 1003
+
+    private var waitingForOverlayPermission = false
 
     override fun configureFlutterEngine(
         @NonNull flutterEngine: FlutterEngine
@@ -32,25 +36,43 @@ class MainActivity : FlutterActivity() {
 
             if (call.method == "startCapture") {
 
-                if (!Settings.canDrawOverlays(this)) {
-
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName")
-                    )
-
-                    startActivity(intent)
-                    result.success(true)
-                    return@setMethodCallHandler
-                }
-
-                requestMicPermission()
+                startPermissionFlow()
 
                 result.success(true)
 
             } else {
                 result.notImplemented()
             }
+        }
+    }
+
+    private fun startPermissionFlow() {
+
+        if (!Settings.canDrawOverlays(this)) {
+
+            waitingForOverlayPermission = true
+
+            val intent = Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+
+            startActivityForResult(intent, REQUEST_OVERLAY)
+            return
+        }
+
+        requestMicPermission()
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        if (
+            waitingForOverlayPermission &&
+            Settings.canDrawOverlays(this)
+        ) {
+            waitingForOverlayPermission = false
+            requestMicPermission()
         }
     }
 
